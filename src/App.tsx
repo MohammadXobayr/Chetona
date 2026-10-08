@@ -330,6 +330,12 @@ export default function App() {
     abortControllerRef.current = new AbortController();
 
     try {
+      console.log('[Frontend Chat] 1. Sending request to /api/chat/stream:', {
+        promptLength: text.length,
+        tone: preferences.tone,
+        language: preferences.language,
+      });
+
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
@@ -347,8 +353,23 @@ export default function App() {
         signal: abortControllerRef.current.signal,
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error('Streaming failed');
+      const contentType = response.headers.get('content-type') || '';
+      console.log('[Frontend Chat] 2. /api/chat/stream response:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType,
+      });
+
+      if (!response.ok || !response.body || contentType.includes('text/html')) {
+        let errSnippet = '';
+        try {
+          const raw = await response.text();
+          errSnippet = raw.slice(0, 100);
+        } catch {}
+        console.warn(
+          `[Frontend Chat] Streaming endpoint failed (Status ${response.status}, Type ${contentType}). Snippet: ${errSnippet}`
+        );
+        throw new Error(`Stream HTTP ${response.status}: ${errSnippet || 'Route failed'}`);
       }
 
       const reader = response.body.getReader();
@@ -404,12 +425,13 @@ export default function App() {
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
+        console.log('[Frontend Chat] Generation stopped by user.');
         setIsLoading(false);
         setIsStreaming(false);
         return;
       }
 
-      console.error('Streaming error, falling back to unary endpoint:', err);
+      console.warn('[Frontend Chat] 3. Streaming failed, falling back to /api/chat:', err?.message);
 
       try {
         const res = await fetch('/api/chat', {
@@ -426,7 +448,25 @@ export default function App() {
           }),
         });
 
+        const resContentType = res.headers.get('content-type') || '';
+        console.log('[Frontend Chat] 4. /api/chat fallback response:', {
+          status: res.status,
+          statusText: res.statusText,
+          contentType: resContentType,
+        });
+
+        if (!res.ok || resContentType.includes('text/html')) {
+          const rawErr = await res.text();
+          console.error('[Frontend Chat] Unary endpoint returned error or HTML:', rawErr.slice(0, 150));
+          throw new Error(`Unary API HTTP ${res.status}`);
+        }
+
         const data = await res.json();
+        console.log('[Frontend Chat] 5. Unary response received:', {
+          hasText: !!data.text,
+          diagnostic: data.diagnostic,
+        });
+
         const reply = data.text || 'চেতনা একটু আটকে গেছে। আবার চেষ্টা করেন।';
 
         const finalMessages = messagesWithAssistant.map((msg) =>
@@ -438,9 +478,12 @@ export default function App() {
         saveCurrentSession(finalMessages);
         setIsLoading(false);
         setIsStreaming(false);
-      } catch (fallbackErr) {
-        console.error('Complete chat failure:', fallbackErr);
-        setErrorMessage('চেতনা একটু আটকে গেছে। আবার চেষ্টা করেন।');
+      } catch (fallbackErr: any) {
+        console.error('[Frontend Chat] Fatal error: Both stream and unary endpoints failed:', fallbackErr);
+        const detailedMsg = fallbackErr?.message?.includes('HTML')
+          ? 'সার্ভার এপিআই রুট লোড হতে ব্যর্থ হয়েছে। Vercel ডিপ্লয়মেন্ট চেক করুন।'
+          : 'চেতনা একটু আটকে গেছে। আবার চেষ্টা করেন।';
+        setErrorMessage(detailedMsg);
         triggerSignatureReaction('error');
         setMessages((current) => current.filter((m) => m.id !== assistantMsgId));
         setIsLoading(false);
