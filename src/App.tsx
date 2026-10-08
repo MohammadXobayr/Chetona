@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Navbar } from './components/Navbar';
 import { SuggestionChips } from './components/SuggestionChips';
 import { ChatMessage } from './components/ChatMessage';
@@ -609,6 +610,9 @@ export default function App() {
         onDeleteSession={handleDeleteSession}
         onNewChat={handleNewChat}
       />
+      
+      {/* Vercel Web Analytics */}
+      <Analytics />
     </div>
   );
 }
