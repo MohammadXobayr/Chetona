@@ -1,7 +1,8 @@
-import React from 'react';
-import { Settings, Plus, Clock, Sparkles, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Plus, Clock, Flame, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 import { ChetanaTone, BalanceChange } from '../types';
 import { ChetanaCardBadge } from './ChetanaCardBadge';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   onNewChat: () => void;
@@ -30,17 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRecharge,
   isLogoReacting,
 }) => {
-  const getToneLabel = (t: ChetanaTone) => {
-    switch (t) {
-      case 'witty':
-        return 'কড়া চেতনা';
-      case 'formal':
-        return 'অফিস মোড';
-      case 'balanced':
-      default:
-        return 'স্বাভাবিক';
-    }
-  };
+  const { user, signInWithGoogle, logOut } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-[#ECEAE4] bg-[#FBFBF9]/90 backdrop-blur-md">
@@ -117,6 +109,62 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Plus className="h-3.5 w-3.5 text-[#006A4E]" />
             <span>New Chat</span>
           </button>
+
+          {/* Firebase Google Auth Button / User Profile */}
+          {user ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-1 rounded-full border border-[#E4E2DC] bg-white p-0.5 hover:border-[#D4D2CA] transition-colors"
+                title={user.displayName || user.email || 'ইউজার প্রোফাইল'}
+              >
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt="User"
+                    className="h-6 w-6 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#006A4E]/10 text-[#006A4E] text-xs font-bold">
+                    {user.displayName?.[0] || 'U'}
+                  </div>
+                )}
+              </button>
+
+              {showUserMenu && (
+                <div
+                  className="absolute right-0 mt-2 w-48 rounded-xl border border-[#E5E3DC] bg-[#FAF9F5] p-2 shadow-xl z-50 font-bengali text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-2 py-1.5 border-b border-[#ECEAE3]">
+                    <p className="font-semibold text-[#18181B] truncate">
+                      {user.displayName || 'ব্যবহারকারী'}
+                    </p>
+                    <p className="text-[10px] text-[#71717A] truncate">{user.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logOut();
+                    }}
+                    className="flex w-full items-center gap-2 px-2 py-1.5 mt-1 rounded-lg text-red-600 hover:bg-red-50 text-left transition-colors"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>লগআউট করুন</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={signInWithGoogle}
+              className="flex items-center gap-1 rounded-lg border border-[#E4E2DC] bg-[#FAF9F5] px-2.5 py-1.5 text-xs font-medium text-[#27272A] hover:border-[#006A4E]/40 hover:bg-white transition-all font-bengali"
+              title="Google দিয়ে সাইন ইন করে ক্লাউডে চ্যাট সংরক্ষণ করুন"
+            >
+              <LogIn className="h-3.5 w-3.5 text-[#006A4E]" />
+              <span className="hidden sm:inline">লগইন</span>
+            </button>
+          )}
 
           {/* Settings icon */}
           <button

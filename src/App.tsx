@@ -7,6 +7,14 @@ import { SettingsModal } from './components/SettingsModal';
 import { HistorySidebar } from './components/HistorySidebar';
 import { Message, ChatSession, UserPreferences, BalanceChange } from './types';
 import { chetonaAudio, ChetanaSoundVariant } from './utils/audio';
+import { useAuth } from './context/AuthContext';
+import {
+  syncUserProfile,
+  updateCloudBalance,
+  fetchCloudSessions,
+  saveCloudSession,
+  deleteCloudSession,
+} from './lib/firestoreService';
 
 const STORAGE_KEY_SESSIONS = 'chetona_chat_sessions_v1';
 const STORAGE_KEY_PREFS = 'chetona_user_prefs_v1';
@@ -15,11 +23,13 @@ const STORAGE_KEY_BALANCE = 'chetona_card_balance_v1';
 const DEFAULT_PREFERENCES: UserPreferences = {
   tone: 'balanced',
   language: 'auto',
-  soundEnabled: true, // 🔊 চেতনা Sound ON by default
+  soundEnabled: true,
   chetanaMode: true,
 };
 
 export default function App() {
+  const { user } = useAuth();
+
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SESSIONS);
@@ -101,21 +111,59 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
+  // Sync with Firestore when user logs in
+  useEffect(() => {
+    if (!user) return;
+    let isCancelled = false;
+
+    async function initFirebaseSync() {
+      if (!user) return;
+      try {
+        const cloudBal = await syncUserProfile(user, balance);
+        if (!isCancelled && typeof cloudBal === 'number') {
+          setBalance(cloudBal);
+        }
+
+        const cloudSessions = await fetchCloudSessions(user.uid);
+        if (!isCancelled && cloudSessions && cloudSessions.length > 0) {
+          setSessions((local) => {
+            const merged = [...cloudSessions];
+            for (const s of local) {
+              if (!merged.some((m) => m.id === s.id)) {
+                merged.push(s);
+              }
+            }
+            return merged.sort((a, b) => b.updatedAt - a.updatedAt);
+          });
+        }
+      } catch (err) {
+        console.error('Firebase sync error:', err);
+      }
+    }
+
+    initFirebaseSync();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
+
   // Helper to trigger signature logo reaction (180-250ms) & sound
   const triggerSignatureReaction = (variant: ChetanaSoundVariant) => {
-    // 1. Logo reaction: 1 -> 1.04 -> 1
     setIsLogoReacting(true);
     setTimeout(() => {
       setIsLogoReacting(false);
     }, 220);
 
-    // 2. Audio signature
     chetonaAudio.playSignature(variant, preferences.soundEnabled);
   };
 
   const updateBalance = (delta: number, customLabel?: string) => {
     setBalance((prev) => {
       const next = Math.max(0, prev + delta);
+      if (user) {
+        updateCloudBalance(user.uid, next).catch(console.error);
+      }
       return next;
     });
 
@@ -151,24 +199,27 @@ export default function App() {
     const firstUserMsg = updatedMessages.find((m) => m.role === 'user');
     const title = firstUserMsg ? firstUserMsg.content.slice(0, 35) : 'নতুন আড্ডা';
 
+    let targetSession: ChatSession | null = null;
+
     setSessions((prev) => {
       const exists = prev.find((s) => s.id === sessionId);
       if (exists) {
-        return prev.map((s) =>
-          s.id === sessionId
-            ? { ...s, messages: updatedMessages, updatedAt: Date.now() }
-            : s
-        );
+        targetSession = { ...exists, messages: updatedMessages, updatedAt: Date.now() };
+        return prev.map((s) => (s.id === sessionId ? targetSession! : s));
       } else {
-        const newSession: ChatSession = {
+        targetSession = {
           id: sessionId!,
           title,
           messages: updatedMessages,
           updatedAt: Date.now(),
         };
-        return [newSession, ...prev];
+        return [targetSession, ...prev];
       }
     });
+
+    if (user && targetSession) {
+      saveCloudSession(user.uid, targetSession).catch(console.error);
+    }
   };
 
   const handleNewChat = () => {
@@ -182,10 +233,8 @@ export default function App() {
     setIsStreaming(false);
     setErrorMessage(null);
 
-    // Signature sound for New Chat: Softer "চে...তনা"
     triggerSignatureReaction('new_chat');
 
-    // Slight playful reward for fresh exploration if below initial
     if (balance < 1000) {
       updateBalance(5, '+৫ চেতনা (নতুন আড্ডা)');
     }
@@ -208,12 +257,20 @@ export default function App() {
 
   const handleDeleteSession = (id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
+    if (user) {
+      deleteCloudSession(user.uid, id).catch(console.error);
+    }
     if (activeSessionId === id) {
       handleNewChat();
     }
   };
 
   const handleClearAllChats = () => {
+    if (user) {
+      for (const s of sessions) {
+        deleteCloudSession(user.uid, s.id).catch(console.error);
+      }
+    }
     setSessions([]);
     handleNewChat();
   };
@@ -235,7 +292,6 @@ export default function App() {
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    // Check if balance is completely zero
     if (balance <= 0) {
       setErrorMessage('চেতনা শেষ। এখন একটু নিজের চেতনা ব্যবহার করুন অথবা টংয়ের চা খেয়ে রিচার্জ নিন ☕');
       triggerSignatureReaction('error');
@@ -255,10 +311,7 @@ export default function App() {
     setInput('');
     setIsLoading(true);
 
-    // Consume 2 চেতনা for the message
     updateBalance(-2, '-২ চেতনা');
-
-    // Signature interaction: "চে—তনা!" + soft pop + logo scale reaction
     triggerSignatureReaction('send');
 
     const assistantMsgId = 'msg_a_' + Date.now();
@@ -346,7 +399,6 @@ export default function App() {
       setMessages(finalMessages);
       saveCurrentSession(finalMessages);
 
-      // Playful small reward when receiving a complete response
       if (Math.random() > 0.6) {
         updateBalance(1, '+১ চেতনা (বুদ্ধিমান চিন্তা)');
       }
@@ -497,7 +549,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Low balance playful notice */}
+        {/* Low balance notice */}
         {isZeroBalance ? (
           <div className="mx-auto my-1 max-w-md px-4 text-center">
             <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-xs text-red-700 font-bengali flex items-center justify-between">
