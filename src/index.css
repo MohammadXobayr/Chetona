@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', 'Hind Siliguri', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a;
+    background-color: #faf9f6;
+  }
+}
+
+/* Custom styling for clean, elegant typography */
+.font-bengali {
+  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Markdown styling inside AI messages */
+.prose-chetona {
+  line-height: 1.7;
+}
+
+.prose-chetona p {
+  margin-bottom: 0.85rem;
+}
+
+.prose-chetona p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chetona ol, .prose-chetona ul {
+  margin-top: 0.5rem;
+  margin-bottom: 0.85rem;
+  padding-left: 1.25rem;
+}
+
+.prose-chetona li {
+  margin-bottom: 0.35rem;
+}
+
+.prose-chetona code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  padding: 0.15em 0.35em;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.prose-chetona pre {
+  margin: 0.75rem 0;
+  padding: 0.85rem 1rem;
+  background-color: #18181b;
+  color: #f4f4f5;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+}
+
+.prose-chetona blockquote {
+  border-left: 2px solid #006a4e;
+  padding-left: 0.85rem;
+  margin: 0.75rem 0;
+  font-style: italic;
+  color: #4b5563;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "CHETONA - বাংলাদেশের AI",
+  "description": "CHETONA (চেতনা) - A minimal, premium Bangladeshi AI assistant with cultural wit, smart observations, and everyday relatable context.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
